@@ -39,7 +39,11 @@ const OUTPUT_BYTES_BASE = 43;
 const EXCESSIVE_FEE_LIMIT: number = 500000; // Limit to 1/200 of a BTC for now
 
 const cluster = require('cluster');
-const numCPUs = 8
+// Determine the number of concurrent workers to spawn
+const os = require("os");
+const numCPUs = os.cpus().length;
+const numSubProcess = numCPUs - 1;
+console.log(`host CPU number is: ${numCPUs}, will create ${numSubProcess} subprocess.`);
 
 export enum REALM_CLAIM_TYPE {
     DIRECT = 'direct',
@@ -539,22 +543,22 @@ export class AtomicalOperationBuilder {
         const mockBaseCommitForFeeCalculation: { scriptP2TR, hashLockP2TR } = prepareCommitRevealConfig(this.options.opType, fundingKeypair, mockAtomPayload)
         const fees: FeeCalculations = this.calculateFeesRequiredForAccumulatedCommitAndReveal(mockBaseCommitForFeeCalculation.hashLockP2TR.redeem.output.length);
 
-        /// 开启进程
+        // begin create process
         if (cluster.isPrimary) {
             let totalNoncesGenerated = 0;
             let workerInfo = {};
             const startTime = Date.now();
 
-            console.log(`主进程 ${process.pid} 正在运行`);
+            console.log(`main process ${process.pid} running...`);
 
             setInterval(() => {
-                const elapsedTime = (Date.now() - startTime) / 1000; // 秒
-                const totalSpeed = (totalNoncesGenerated / elapsedTime) / 1000; // 每秒生成的 k nonces 总数
-                console.log(chalk.red(`当前总速度: ${totalSpeed.toFixed(2)} k nonces/秒`));
-            }, 1000); // 每 1000 毫秒更新一次速度
+                const elapsedTime = (Date.now() - startTime) / 1000; // second
+                const totalSpeed = (totalNoncesGenerated / elapsedTime) / 1000; // per second generate K nonces number.
+                console.log(chalk.red(`current total speed: ${totalSpeed.toFixed(2)} K nonces/s`));
+            }, 1000); // update speed every 1000ms
 
-            // 根据 CPU 数量创建子进程
-            for (let i = 0; i < numCPUs; i++) {
+            // create subprocess according to CPU number.
+            for (let i = 0; i < numSubProcess; i++) {
                 const worker = cluster.fork();
                 workerInfo[worker.id] = {
                     startTime: Date.now(),
@@ -566,18 +570,18 @@ export class AtomicalOperationBuilder {
                             totalNoncesGenerated += message.noncesGenerated;
                             const info = workerInfo[worker.id];
                             info.noncesGenerated += message.noncesGenerated;
-                            const elapsedTime = (Date.now() - info.startTime) / 1000; // 秒
-                            const speed = info.noncesGenerated / elapsedTime; // 每秒生成的 nonces 数量
-                            console.log(`工作进程 ${worker.id} 的速度: ${speed.toFixed(2)} nonces/秒`);
+                            const elapsedTime = (Date.now() - info.startTime) / 1000; // second
+                            const speed = info.noncesGenerated / elapsedTime; // per second generate nonces number.
+                            console.log(`worker process ${worker.id} speed: ${speed.toFixed(2)} nonces/s`);
                         }
                         if (message.validTxFound) {
-                            console.log(`有效交易由子进程 ${worker.process.pid} 交易: ${message.commitTxid} ${message.revealTxid}`);
+                            console.log(`available tx via ${worker.process.pid} : ${message.commitTxid} ${message.revealTxid}`);
                             for (const id in cluster.workers) {
                                 cluster.workers[id]?.kill();
                             }
                         }
                         worker.on('exit', (code, signal) => {
-                            console.log(`子进程 ${worker.process.pid} 已退出`);
+                            console.log(`subprocess ${worker.process.pid} exit`);
                         });
                     });
                 }
