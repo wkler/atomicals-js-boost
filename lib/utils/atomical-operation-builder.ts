@@ -6,6 +6,7 @@ import { ECPairFactory, ECPairAPI, TinySecp256k1Interface } from 'ecpair';
 const tinysecp: TinySecp256k1Interface = require('tiny-secp256k1');
 const bitcoin = require('bitcoinjs-lib');
 import * as chalk from 'chalk';
+import * as readline from 'readline'
 bitcoin.initEccLib(ecc);
 import {
     initEccLib,
@@ -61,6 +62,7 @@ export interface FeeCalculations {
 }
 
 function logMiningProgressToConsole(dowork: boolean, disableMiningChalk, txid, nonces) {
+    dowork = false;
     if (!dowork) {
         return;
     }
@@ -72,7 +74,7 @@ function logMiningProgressToConsole(dowork: boolean, disableMiningChalk, txid, n
     }
     process.stdout.clearLine(0);
     process.stdout.cursorTo(0);
-    // process.stdout.write(chalk.red(txid, ' nonces: ', nonces));
+    process.stdout.write(chalk.red(txid, ' nonces: ', nonces));
 }
 function printBitworkLog(bitworkInfo: BitworkInfo, commit?: boolean) {
     if (!bitworkInfo) {
@@ -556,7 +558,7 @@ export class AtomicalOperationBuilder {
 
             setInterval(() => {
                 if (activeDisplaySpeed) {
-                    console.log(chalk.red(`Current total nonces generated: ${totalNoncesGenerated.toFixed(2)}`));
+                    console.log(chalk.red(`\nTotal nonces generated: ${totalNoncesGenerated}`));
                     console.log(chalk.red(`Last time-slice(${updateInterval/1000} second) total speed: ${(totalNoncesPerSliceTime/updateInterval).toFixed(2)} K/s`));
                     totalNoncesPerSliceTime = 0;
                 }
@@ -576,7 +578,10 @@ export class AtomicalOperationBuilder {
                     console.log(`Worker process[ID:${worker.id}] is spawned...`);
                     worker.on('message', (message) => {
                         if (message.type === 'updateNonceCount') {
-                            console.log(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} nonces/s`);
+                            readline.clearLine(process.stdout, 0);
+                            readline.cursorTo(process.stdout, 0);
+                            process.stdout.write(chalk.yellow(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} nonces/s`));
+                            // console.log(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} nonces/s`);
                             totalNoncesPerSliceTime += message.noncesPerSlice;
                             totalNoncesGenerated += message.noncesPerSlice;
                             activeDisplaySpeed = 1;
