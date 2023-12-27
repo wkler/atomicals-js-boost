@@ -37,13 +37,9 @@ const BASE_BYTES = 10.5;
 const INPUT_BYTES_BASE = 57.5;
 const OUTPUT_BYTES_BASE = 43;
 const EXCESSIVE_FEE_LIMIT: number = 500000; // Limit to 1/200 of a BTC for now
-
-const cluster = require('cluster');
 // Determine the number of concurrent workers to spawn
 const os = require("os");
-const numCPUs = os.cpus().length;
-const numSubProcess = numCPUs - 1;
-console.log(`host CPU number is: ${numCPUs}, will create ${numSubProcess} subprocess.`);
+const cluster = require('cluster');
 
 export enum REALM_CLAIM_TYPE {
     DIRECT = 'direct',
@@ -546,54 +542,68 @@ export class AtomicalOperationBuilder {
         // begin create process
         if (cluster.isPrimary) {
             let totalNoncesGenerated = 0;
+            let totalNoncesPerSliceTime = 0;
             let workerInfo = {};
+            let activeDisplaySpeed = 0;
+            const updateInterval = 5000; //milli second
             const startTime = Date.now();
 
+            console.log(`job start time ${startTime}`);
             console.log(`main process ${process.pid} running...`);
 
+            //waiting user fund BTC...
+            await getFundingUtxo(this.options.electrumApi, fundingKeypair.address, fees.commitAndRevealFeePlusOutputs);
+
             setInterval(() => {
-                const elapsedTime = (Date.now() - startTime) / 1000; // second
-                const totalSpeed = (totalNoncesGenerated / elapsedTime) / 1000; // per second generate K nonces number.
-                console.log(chalk.red(`current total speed: ${totalSpeed.toFixed(2)} K nonces/s`));
-            }, 1000); // update speed every 1000ms
+                if (activeDisplaySpeed) {
+                    console.log(chalk.red(`Current total nonces generated: ${totalNoncesGenerated.toFixed(2)}`));
+                    console.log(chalk.red(`Last time-slice(${updateInterval/1000} second) total speed: ${(totalNoncesPerSliceTime/updateInterval).toFixed(2)} K/s`));
+                    totalNoncesPerSliceTime = 0;
+                }
+            }, updateInterval); // update total speed every 5000ms
+
+            const numCPUs = os.cpus().length;
+            const numSubProcess = numCPUs;
+            console.log(`host CPU number is: ${numCPUs}, will create ${numSubProcess} subprocess.`);
 
             // create subprocess according to CPU number.
             for (let i = 0; i < numSubProcess; i++) {
                 const worker = cluster.fork();
-                workerInfo[worker.id] = {
-                    startTime: Date.now(),
-                    noncesGenerated: 0
-                };
                 if (worker) {
+                    workerInfo[worker.id] = {
+                        startTime: Date.now()
+                    };
+                    console.log(`Worker process[ID:${worker.id}] is spawned...`);
                     worker.on('message', (message) => {
                         if (message.type === 'updateNonceCount') {
-                            totalNoncesGenerated += message.noncesGenerated;
-                            const info = workerInfo[worker.id];
-                            info.noncesGenerated += message.noncesGenerated;
-                            const elapsedTime = (Date.now() - info.startTime) / 1000; // second
-                            const speed = info.noncesGenerated / elapsedTime; // per second generate nonces number.
-                            console.log(`worker process ${worker.id} speed: ${speed.toFixed(2)} nonces/s`);
+                            console.log(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} nonces/s`);
+                            totalNoncesPerSliceTime += message.noncesPerSlice;
+                            totalNoncesGenerated += message.noncesPerSlice;
+                            activeDisplaySpeed = 1;
                         }
-                        if (message.validTxFound) {
-                            console.log(`available tx via ${worker.process.pid} : ${message.commitTxid} ${message.revealTxid}`);
+                        else if (message.type === 'foundBitwork') {
+                            console.log(`Available Bitwork found via Subprocess: ${worker.process.pid} commitTxid: ${message.commitTxid} revealTxid: ${message.revealTxid}`);
+                            console.log(`Now kill all worker processes...`);
                             for (const id in cluster.workers) {
                                 cluster.workers[id]?.kill();
                             }
+                            console.log(`Kill CMD send completed`);
                         }
-                        worker.on('exit', (code, signal) => {
-                            console.log(`subprocess ${worker.process.pid} exit`);
-                        });
+                    });
+                    worker.on('exit', (code, signal) => {
+                        console.log(`subprocess ${worker.process.pid} exit`);
                     });
                 }
             }
-        } else {
+        } else { //worker sub processes
             ////////////////////////////////////////////////////////////////////////
             // Begin Commit Transaction
             ////////////////////////////////////////////////////////////////////////
             if (performBitworkForCommitTx) {
                 let noncesGenerated = 0;
-                let lastUpdateNonceCount = 0;
-                const fundingUtxo = await getFundingUtxo(this.options.electrumApi, fundingKeypair.address, fees.commitAndRevealFeePlusOutputs)
+                let noncesCntPerSlice = 0;
+                let lastUpdateNonceTime = Date.now();
+                const fundingUtxo = await getFundingUtxo(this.options.electrumApi, fundingKeypair.address, fees.commitAndRevealFeePlusOutputs, true);
                 printBitworkLog(this.bitworkInfoCommit as any, true);
                 this.options.electrumApi.close();
                 do {
@@ -656,12 +666,13 @@ export class AtomicalOperationBuilder {
                         hashLockP2TR = updatedBaseCommit.hashLockP2TR;
                     }
                     noncesGenerated++;
-                    if (noncesGenerated % 10000 === 0) {
-                        const nonceIncrement = noncesGenerated - lastUpdateNonceCount;
-                        lastUpdateNonceCount = noncesGenerated;
+                    noncesCntPerSlice++;
+                    if (((Date.now() - lastUpdateNonceTime)) > 1000) { // milli second
                         if (process.send) {
-                            process.send({ type: 'updateNonceCount', noncesGenerated: nonceIncrement });
+                            process.send({ type: 'updateNonceCount', noncesPerSlice: noncesCntPerSlice });
                         }
+                        noncesCntPerSlice = 0;
+                        lastUpdateNonceTime = Date.now();
                     }
                 } while (performBitworkForCommitTx);
             }
@@ -840,6 +851,9 @@ export class AtomicalOperationBuilder {
             if (this.options.opType === 'dat') {
                 ret['data']['dataId'] = revealTxid + 'i0';
                 ret['data']['urn'] = 'atom:btc:dat:' + revealTxid + 'i0';
+            }
+            if (process.send) {
+                process.send({type: 'foundBitwork', commitTxid: commitTxid, revealTxid: revealTxid});
             }
             return ret;
         }
