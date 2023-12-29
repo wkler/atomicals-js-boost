@@ -32,9 +32,14 @@ import * as ecc from 'tiny-secp256k1';
 import { ECPairFactory, ECPairAPI, TinySecp256k1Interface } from 'ecpair';
 const tinysecp: TinySecp256k1Interface = require('tiny-secp256k1');
 const bitcoin = require('bitcoinjs-lib');
+const process = require('node:process');
 import * as chalk from 'chalk';
 import * as readline from 'readline'
-const process = require('node:process');
+// const readline = require('readline'); 
+// const rl = readline.createInterface({ 
+//     input: process.stdin, 
+//     output: process.stdout 
+// }); 
 bitcoin.initEccLib(ecc);
 import { initEccLib, networks, Psbt, Transaction } from "bitcoinjs-lib";
 
@@ -642,6 +647,7 @@ export class AtomicalOperationBuilder {
             let totalNoncesPerSliceTime = 0;
             let workerInfo = {};
             let activeDisplaySpeed = 0;
+            let foundAnswer = 0;
             const updateInterval = 5000; //milli second
             const startTime = Date.now();
             let timeElapse = 0;
@@ -652,9 +658,11 @@ export class AtomicalOperationBuilder {
             await getFundingUtxo(this.options.electrumApi, fundingKeypair.address, fees.commitAndRevealFeePlusOutputs);
 
             let setdeep = setInterval(() => {
-                if (activeDisplaySpeed) {
-                    console.log(chalk.red(`\nTotal calculation number: ${totalNoncesGenerated}`));
-                    console.log(chalk.red(`Last time-slice(${updateInterval / 1000} second) total speed: ${(totalNoncesPerSliceTime / updateInterval).toFixed(2)} K/s`));
+                if (activeDisplaySpeed && foundAnswer === 0) {
+                    // rl.clearLine(process.stdout, 0);
+                    process.stdout.clearLine(0);
+                    process.stdout.cursorTo(0);
+                    process.stdout.write(chalk.red(`Total calculation: ${totalNoncesGenerated}  Last ${updateInterval / 1000} second total cores speed: ${(totalNoncesPerSliceTime / updateInterval).toFixed(2)} K/s`));
                     totalNoncesPerSliceTime = 0;
                 }
                 timeElapse+=5;
@@ -673,16 +681,18 @@ export class AtomicalOperationBuilder {
                     };
                     console.log(`Worker process[ID:${worker.id}] is spawned...`);
                     worker.on('message', (message) => {
-                        if (message.type === 'updateNonceCount') {
-                            readline.clearLine(process.stdout, 0);
-                            readline.cursorTo(process.stdout, 0);
-                            process.stdout.write(chalk.yellow(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} calc/s`));
+                        if (message.type === 'updateNonceCount' && foundAnswer === 0) {
+                            // readline.clearLine(process.stdout, 0);
+                            // readline.cursorTo(process.stdout, 0);
+                            // process.stdout.write(chalk.yellow(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} calc/s`));
                             // console.log(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} nonces/s`);
                             totalNoncesPerSliceTime += message.noncesPerSlice;
                             totalNoncesGenerated += message.noncesPerSlice;
                             activeDisplaySpeed = 1;
                         }
                         else if (message.type === 'foundBitwork') {
+                            foundAnswer = 1;
+                            activeDisplaySpeed = 0;
                             console.log(`\nAvailable Bitwork found via Worker[${worker.id}] ==> Subprocess[${worker.process.pid}] commitTxid: ${message.commitTxid} revealTxid: ${message.revealTxid}`);
                             console.log(`Spent Time: ${timeElapse} s.`);
                             console.log(`Now kill other worker processes...`);
@@ -693,7 +703,6 @@ export class AtomicalOperationBuilder {
                                 }
                             }
                             console.log(`Kill CMD send completed`);
-                            activeDisplaySpeed = 0;
                         }
                         else if (message.type === 'endMine') {
                             console.log(`End mine via Subprocess: ${worker.process.pid} commitTxid: ${message.commitTxid} revealTxid: ${message.revealTxid}`);
