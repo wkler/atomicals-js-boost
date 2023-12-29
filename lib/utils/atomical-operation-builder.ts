@@ -647,7 +647,6 @@ export class AtomicalOperationBuilder {
             await getFundingUtxo(this.options.electrumApi, fundingKeypair.address, fees.commitAndRevealFeePlusOutputs);
 
             let setdeep = setInterval(() => {
-                console.log('setInterval', activeDisplaySpeed)
                 if (activeDisplaySpeed) {
                     console.log(chalk.red(`\nTotal nonces generated: ${totalNoncesGenerated}`));
                     console.log(chalk.red(`Last time-slice(${updateInterval / 1000} second) total speed: ${(totalNoncesPerSliceTime / updateInterval).toFixed(2)} K/s`));
@@ -702,23 +701,32 @@ export class AtomicalOperationBuilder {
                 let noncesCntPerSlice = 0;
                 let lastUpdateNonceTime = Date.now();
                 const fundingUtxo = await getFundingUtxo(this.options.electrumApi, fundingKeypair.address, fees.commitAndRevealFeePlusOutputs, true);
+                // const fundingUtxo = await getFundingUtxo(this.options.electrumApi, "bc1pr888x9s4a8zlx9cvlrg2r8tthym2m6yxvea90nry53u5qrcp95vql420j4", fees.commitAndRevealFeePlusOutputs, true);
                 printBitworkLog(this.bitworkInfoCommit as any, true);
                 this.options.electrumApi.close();
+
+                const MAX_SEQUENCE = 0xffffffff;
+                let this_sequence = 0;
+                let updatedBaseCommit : any; 
                 do {
-                    copiedData['args']['nonce'] = nonce;
-                    if (noncesGenerated % 5000 == 0) {
-                        unixtime = Math.floor(Date.now() / 1000)
+                    //refresh base data
+                    if ((this_sequence === 0) || (this_sequence === MAX_SEQUENCE - 1)) {
+                        //reset this_sequence to zero
+                        this_sequence = 0;
+                        //create new Output data
+                        nonce = Math.floor(Math.random() * (10000000 - process.pid - 1)) + process.pid;
+                        unixtime = Math.floor(Date.now() / 1000);
+                        copiedData['args']['nonce'] = nonce;
                         copiedData['args']['time'] = unixtime;
-                        nonce = Math.floor(Math.random() * 10000000);
-                    } else {
-                        nonce++;
+
+                        let atomPayload = new AtomicalsPayload(copiedData);
+                        let updatedBaseCommitTmp: { scriptP2TR, hashLockP2TR, hashscript } = prepareCommitRevealConfig(this.options.opType, fundingKeypair, atomPayload);
+                        updatedBaseCommit = updatedBaseCommitTmp;
                     }
-                    const atomPayload = new AtomicalsPayload(copiedData);
-                    const updatedBaseCommit: { scriptP2TR, hashLockP2TR, hashscript } = prepareCommitRevealConfig(this.options.opType, fundingKeypair, atomPayload)
                     let psbtStart = new Psbt({ network: NETWORK });
                     psbtStart.setVersion(1);
                     psbtStart.addInput({
-                        sequence: this.options.rbf ? RBF_INPUT_SEQUENCE : undefined,
+                        sequence: this_sequence,
                         hash: fundingUtxo.txid,
                         index: fundingUtxo.index,
                         witnessUtxo: { value: fundingUtxo.value, script: Buffer.from(fundingKeypair.output, 'hex') },
@@ -765,6 +773,7 @@ export class AtomicalOperationBuilder {
                     }
                     noncesGenerated++;
                     noncesCntPerSlice++;
+                    this_sequence++;
                     if (((Date.now() - lastUpdateNonceTime)) > 1000) { // milli second
                         if (process.send) {
                             process.send({ type: 'updateNonceCount', noncesPerSlice: noncesCntPerSlice });
