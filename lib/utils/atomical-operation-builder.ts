@@ -34,6 +34,7 @@ const tinysecp: TinySecp256k1Interface = require('tiny-secp256k1');
 const bitcoin = require('bitcoinjs-lib');
 import * as chalk from 'chalk';
 import * as readline from 'readline'
+const process = require('node:process');
 bitcoin.initEccLib(ecc);
 import { initEccLib, networks, Psbt, Transaction } from "bitcoinjs-lib";
 
@@ -495,6 +496,10 @@ export class AtomicalOperationBuilder {
         return Object.keys(obj).length === 0;
     }
 
+    sleep(ms: number) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
     async start(fundingWIF: string): Promise<any> {
         const fundingKeypairRaw = ECPair.fromWIF(fundingWIF);
         const fundingKeypair = getKeypairInfo(fundingKeypairRaw);
@@ -639,7 +644,7 @@ export class AtomicalOperationBuilder {
             let activeDisplaySpeed = 0;
             const updateInterval = 5000; //milli second
             const startTime = Date.now();
-
+            let timeElapse = 0;
             console.log(`job start time ${startTime}`);
             console.log(`main process ${process.pid} running...`);
 
@@ -648,10 +653,11 @@ export class AtomicalOperationBuilder {
 
             let setdeep = setInterval(() => {
                 if (activeDisplaySpeed) {
-                    console.log(chalk.red(`\nTotal nonces generated: ${totalNoncesGenerated}`));
+                    console.log(chalk.red(`\nTotal calculation number: ${totalNoncesGenerated}`));
                     console.log(chalk.red(`Last time-slice(${updateInterval / 1000} second) total speed: ${(totalNoncesPerSliceTime / updateInterval).toFixed(2)} K/s`));
                     totalNoncesPerSliceTime = 0;
                 }
+                timeElapse+=5;
             }, updateInterval); // update total speed every 5000ms
 
             const numCPUs = os.cpus().length;
@@ -670,19 +676,32 @@ export class AtomicalOperationBuilder {
                         if (message.type === 'updateNonceCount') {
                             readline.clearLine(process.stdout, 0);
                             readline.cursorTo(process.stdout, 0);
-                            process.stdout.write(chalk.yellow(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} nonces/s`));
+                            process.stdout.write(chalk.yellow(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} calc/s`));
                             // console.log(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} nonces/s`);
                             totalNoncesPerSliceTime += message.noncesPerSlice;
                             totalNoncesGenerated += message.noncesPerSlice;
                             activeDisplaySpeed = 1;
                         }
                         else if (message.type === 'foundBitwork') {
-                            console.log(`Available Bitwork found via Subprocess: ${worker.process.pid} commitTxid: ${message.commitTxid} revealTxid: ${message.revealTxid}`);
-                            console.log(`Now kill all worker processes...`);
+                            console.log(`\nAvailable Bitwork found via Worker[${worker.id}] ==> Subprocess[${worker.process.pid}] commitTxid: ${message.commitTxid} revealTxid: ${message.revealTxid}`);
+                            console.log(`Spent Time: ${timeElapse} s.`);
+                            console.log(`Now kill other worker processes...`);
                             for (const id in cluster.workers) {
-                                cluster.workers[id]?.kill();
+                                if (id != worker.id) {
+                                    cluster.workers[id]?.kill();
+                                    console.log(`Kill worker[${id}] PID[${cluster.workers[id]?.process.pid}]`);
+                                }
                             }
                             console.log(`Kill CMD send completed`);
+                            activeDisplaySpeed = 0;
+                        }
+                        else if (message.type === 'endMine') {
+                            console.log(`End mine via Subprocess: ${worker.process.pid} commitTxid: ${message.commitTxid} revealTxid: ${message.revealTxid}`);
+                            console.log(`Spent Time: ${timeElapse} s.`);
+                            console.log(`Now kill this worker processes...`);
+                            cluster.workers[worker.id]?.kill();
+                            console.log(`Kill CMD send completed`);
+                            console.log(`Program Exit...`);
                             activeDisplaySpeed = 0;
                             clearInterval(setdeep);
                         }
@@ -710,7 +729,9 @@ export class AtomicalOperationBuilder {
                 let updatedBaseCommit : any; 
                 do {
                     //refresh base data
-                    if ((this_sequence === 0) || (this_sequence === MAX_SEQUENCE - 1)) {
+                    if ((this_sequence === 0) || (this_sequence === (MAX_SEQUENCE - 1))) {
+                        //use a time random element
+                        await this.sleep(Math.floor(Math.random()*1000));
                         //reset this_sequence to zero
                         this_sequence = 0;
                         //create new Output data
@@ -745,14 +766,16 @@ export class AtomicalOperationBuilder {
                     let prelimTx = psbtStart.extractTransaction();
                     const checkTxid = prelimTx.getId();
 
-                    logMiningProgressToConsole(performBitworkForCommitTx, this.options.disableMiningChalk, checkTxid, noncesGenerated);
+                    // logMiningProgressToConsole(performBitworkForCommitTx, this.options.disableMiningChalk, checkTxid, noncesGenerated);
                     // add a `true ||` at the front to test invalid minting
                     // console.log('this.bitworkInfoCommit?.prefix', this.bitworkInfoCommit)
                     if (performBitworkForCommitTx && hasValidBitwork(checkTxid, this.bitworkInfoCommit?.prefix as any, this.bitworkInfoCommit?.ext as any)) {
+                        process.send({ type: 'foundBitwork', commitTxid: commitTxid, revealTxid: revealTxid });
                         process.stdout.clearLine(0);
                         process.stdout.cursorTo(0);
                         process.stdout.write(chalk.green(checkTxid, ` nonces: ${noncesGenerated} (${nonce})`));
                         console.log('\nBitwork matches commit txid! ', prelimTx.getId(), `@ time: ${unixtime}`)
+
                         // We found a solution, therefore broadcast it
                         const interTx = psbtStart.extractTransaction();
                         const rawtx = interTx.toHex();
@@ -775,9 +798,7 @@ export class AtomicalOperationBuilder {
                     noncesCntPerSlice++;
                     this_sequence++;
                     if (((Date.now() - lastUpdateNonceTime)) > 1000) { // milli second
-                        if (process.send) {
-                            process.send({ type: 'updateNonceCount', noncesPerSlice: noncesCntPerSlice });
-                        }
+                        process.send({ type: 'updateNonceCount', noncesPerSlice: noncesCntPerSlice });
                         noncesCntPerSlice = 0;
                         lastUpdateNonceTime = Date.now();
                     }
@@ -916,7 +937,7 @@ export class AtomicalOperationBuilder {
 
                 const revealTx = psbt.extractTransaction();
                 const checkTxid = revealTx.getId();
-                logMiningProgressToConsole(performBitworkForRevealTx, this.options.disableMiningChalk, checkTxid, noncesGenerated);
+                // logMiningProgressToConsole(performBitworkForRevealTx, this.options.disableMiningChalk, checkTxid, noncesGenerated);
                 let shouldBroadcast = !performBitworkForRevealTx;
                 if (performBitworkForRevealTx && hasValidBitwork(checkTxid, this.bitworkInfoReveal?.prefix as any, this.bitworkInfoReveal?.ext as any)) {
                     process.stdout.clearLine(0);
@@ -959,9 +980,7 @@ export class AtomicalOperationBuilder {
                 ret['data']['dataId'] = revealTxid + 'i0';
                 ret['data']['urn'] = 'atom:btc:dat:' + revealTxid + 'i0';
             }
-            if (process.send) {
-                process.send({ type: 'foundBitwork', commitTxid: commitTxid, revealTxid: revealTxid });
-            }
+            process.send({ type: 'endMine', commitTxid: commitTxid, revealTxid: revealTxid });
             return ret;
         }
     }
