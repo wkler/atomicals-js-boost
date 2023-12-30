@@ -1,5 +1,8 @@
 {
     "name": "",
+    "desc": "",
     "image": "atom:btc:dat:<location of store-file data>/image.png",
-    "decimals": 0
+    "legal": {
+        "terms": ""
+    }
 }

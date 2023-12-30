@@ -12,6 +12,15 @@ import { toXOnly } from "./create-key-pair";
 import { Network } from "bitcoinjs-lib";
 dotenv.config();
 
+function convertAddressToScripthash(address, network) {
+  const output = bitcoin.address.toOutputScript(address, network);
+  return {
+      output,
+      scripthash: Buffer.from(sha256(output), "hex").reverse().toString("hex"),
+      address
+  };
+}
+
 export function detectAddressTypeToScripthash(address: string): { output: string, scripthash: string, address: string } {
   // Detect legacy address
   try {
@@ -27,37 +36,15 @@ export function detectAddressTypeToScripthash(address: string): { output: string
   }
   // Detect segwit or taproot
   // const detected = bitcoin.address.fromBech32(address);
-  if (address.indexOf('bc1p') === 0) {
-    const output = bitcoin.address.toOutputScript(address, NETWORK);
-    return {
-      output,
-      scripthash: Buffer.from(sha256(output), "hex").reverse().toString("hex"),
-      address
-    }
-  } else if (address.indexOf('bc1') === 0) {
-    const output = bitcoin.address.toOutputScript(address, NETWORK);
-    return {
-      output,
-      scripthash: Buffer.from(sha256(output), "hex").reverse().toString("hex"),
-      address
-    }
-  } else if (address.indexOf('tb1') === 0) {
-    const output = bitcoin.address.toOutputScript(address, NETWORK);
-    return {
-      output,
-      scripthash: Buffer.from(sha256(output), "hex").reverse().toString("hex"),
-      address
-    }
-  } else if (address.indexOf('bcrt1p') === 0) {
-    const output = bitcoin.address.toOutputScript(address, NETWORK);
-    return {
-      output,
-      scripthash: Buffer.from(sha256(output), "hex").reverse().toString("hex"),
-      address
-    }
-  }
-  else {
-    throw "unrecognized address";
+  const BECH32_SEGWIT_PREFIX = 'bc1';
+  const BECH32_TAPROOT_PREFIX = 'bc1p';
+  const TESTNET_SEGWIT_PREFIX = 'tb1';
+  const REGTEST_TAPROOT_PREFIX = 'bcrt1p';
+  if (address.startsWith(BECH32_SEGWIT_PREFIX) || address.startsWith(BECH32_TAPROOT_PREFIX) ||
+      address.startsWith(TESTNET_SEGWIT_PREFIX) || address.startsWith(REGTEST_TAPROOT_PREFIX)) {
+    return convertAddressToScripthash(address, NETWORK);
+  } else {
+    throw new Error(`Unrecognized address format for address: ${address}`);
   }
 }
 

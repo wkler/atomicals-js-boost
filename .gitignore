@@ -11,6 +11,7 @@ update_txs/
 payment_txs/
 download_txs/
 transfer_txs/
+wallets/
 wallet.json
 wallet.json.*
 keypairs.json

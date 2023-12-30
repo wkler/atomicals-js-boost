@@ -90,7 +90,6 @@ export interface FeeCalculations {
     revealFeeOnly: number;
 }
 
-
 function logMiningProgressToConsole(dowork: boolean, disableMiningChalk, txid, nonces) {
     if (!dowork) {
         return;
@@ -632,7 +631,6 @@ export class AtomicalOperationBuilder {
         if (payloadSize <= 1000) {
             console.log("Payload Encoded: ", copiedData);
         }
-
         const mockBaseCommitForFeeCalculation: { scriptP2TR, hashLockP2TR } = prepareCommitRevealConfig(this.options.opType, fundingKeypair, mockAtomPayload)
         const fees: FeeCalculations = this.calculateFeesRequiredForAccumulatedCommitAndReveal(mockBaseCommitForFeeCalculation.hashLockP2TR.redeem.output.length);
 
@@ -963,7 +961,6 @@ export class AtomicalOperationBuilder {
                 nonce++;
                 noncesGenerated++;
             } while (performBitworkForRevealTx);
-
             const ret = {
                 success: true,
                 data: {
@@ -1167,7 +1164,6 @@ export class AtomicalOperationBuilder {
         const expectedFee =
             fee.commitFeeOnly +
             (this.options.satsbyte as any) * OUTPUT_BYTES_BASE;
-        // console.log('expectedFee', expectedFee);
         const differenceBetweenCalculatedAndExpected =
             calculatedFee - expectedFee;
         if (differenceBetweenCalculatedAndExpected <= 0) {

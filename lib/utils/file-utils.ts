@@ -1,12 +1,8 @@
-
-
 import * as fs from 'fs';
- 
-import { JsonStreamStringify } from 'json-stream-stringify';
 
 export const fileReader = async (filePath, encoding?: any) => {
 	return new Promise((resolve, reject) => {
-		fs.readFile(filePath, encoding, (err, fileData: any) => {
+		fs.readFile(filePath, encoding, (err, fileData: string) => {
 			if (err) {
 				console.log(`Error reading ${filePath}`, err);
 				return reject(err);
@@ -21,7 +17,7 @@ export const fileReader = async (filePath, encoding?: any) => {
 	});
 }
 
-export const jsonFileReader = async (filePath) => {
+export const jsonFileReader = async <T extends object>(filePath) : Promise<T> => {
 	return new Promise((resolve, reject) => {
 		fs.readFile(filePath, (err, fileData: any) => {
 			if (err) {
@@ -79,8 +75,8 @@ export const jsonFileWriter = async (filePath, data) => {
 };
 
 const json = require('big-json');
- 
-// pojo will be sent out in JSON chunks written to the specified file name in the root 
+
+// pojo will be sent out in JSON chunks written to the specified file name in the root
 function makeFile(filename, pojo){
 
     const stringifyStream = json.createStringifyStream({

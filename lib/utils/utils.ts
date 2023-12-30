@@ -1,12 +1,12 @@
 
-export const sleeper = async (seconds) => {
-    return new Promise((resolve) => {
+export const sleeper = async (seconds: number) => {
+    return new Promise<boolean>((resolve) => {
       setTimeout(() => {
         resolve(true);
       }, seconds * 1000);
     })
   }
 
-export function onlyUnique(value, index, array) {
+export function onlyUnique<T>(value: T, index: number, array: T[]) {
   return array.indexOf(value) === index;
 }

@@ -5,24 +5,39 @@
 
 ![Atomicals](banner.png)
 
+
+### WARNING: STRONGLY RECOMMENDED TO USE YARN INSTEAD OF NPM
+
+Use `yarn` package manager instead of `npm`. Instructions below (They are: `npm install -g yarn`)
+
+In the latest version of the CLI processing library the option switches (the settings starting with `--`) are not processed correctly and it would lead to
+too small of a fee being set and result in your transactions not being mined.
+
+Workaround: Use `yarn` instead of `npm`
+
+
 ### Install, Build and Run Tests
 
 ## Install
 
 ```
-Download the github repo:
+# Download the github repo:
 git clone https://github.com/atomicals/atomicals-js.git
 
-Build:
-# If you don't have yarn installed
+cd atomicals-js
+
+# Build:
+# If you don't have yarn & node installed
+# npm install -g node
 # npm install -g yarn
 
 yarn install
 yarn run build
 
-See all commands at:
+#See all commands at:
 
 yarn run cli --help
+
 ```
 
 ### Quick Start - Command Line (CLI)
@@ -38,6 +53,9 @@ ELECTRUMX_WSS=wss://electrumx.atomicals.xyz:50012
 
 // Optional (defaults to wallet.json)
 WALLET_PATH=path-to-wallet.json
+
+// The number of concurrent processes to be used. This should not exceed the number of CPU cores available. If not set, the default behavior is to use all available CPU cores minus one.
+CONCURRENCY=4
 ```
 
 _ELECTRUMX_WSS_: URL of the ElectrumX with Atomicals support. Note that only `wss` endpoints are accessible from web browsers.

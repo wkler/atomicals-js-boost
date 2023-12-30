@@ -75,6 +75,7 @@ import { GetContainerItemValidatedByManifestCommand } from "./commands/get-conta
 import { CreateDmintItemManifestsCommand } from "./commands/create-dmint-manifest-command";
 import { CreateDmintCommand } from "./commands/create-dmint-command";
 import { TransferInteractiveBuilderCommand } from "./commands/transfer-interactive-builder-command";
+import { DecodeTxCommand } from "./commands/decode-tx-command";
 export { decorateAtomicals } from "./utils/atomical-format-helpers";
 export { addressToP2PKH } from "./utils/address-helpers";
 export { getExtendTaprootAddressKeypairPath } from "./utils/address-keypair-path";
@@ -115,6 +116,19 @@ export class Atomicals implements APIInterface {
     }
   }
 
+
+  static async decodeTx(rawtx: string): Promise<CommandResultInterface> {
+    try {
+      const command: CommandInterface = new DecodeTxCommand(rawtx);
+      return await command.run();
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.toString(),
+        error
+      }
+    }
+  }
 
   static async renderPreviews(filesmap: FileMap, body: boolean): Promise<any> {
     try {

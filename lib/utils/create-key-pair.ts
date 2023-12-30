@@ -15,7 +15,16 @@ export const toXOnly = (publicKey) => {
 }
 const bip39 = require('bip39');
 
-export const createKeyPair = async (phrase: string = '', path = `m/44'/0'/0'/0/0`) => {
+export interface KeyPair {
+    address: string
+    publicKey: string
+    publicKeyXOnly: string
+    path: string,
+    WIF: string
+    privateKey?: string
+}
+
+export const createKeyPair = async (phrase: string = '', path = `m/44'/0'/0'/0/0`) : Promise<KeyPair> => {
     if (!phrase || phrase === '') {
         const phraseResult = await createMnemonicPhrase();
         phrase = phraseResult.phrase;
@@ -52,7 +61,6 @@ export const createKeyPair = async (phrase: string = '', path = `m/44'/0'/0'/0/0
         path,
         WIF: childNodePrimary.toWIF(),
         privateKey: childNodePrimary.privateKey?.toString('hex'),
-        // tweakedChildNode: tweakedChildNodePrimary
     }
 }
 export interface WalletRequestDefinition {
@@ -71,7 +79,7 @@ export const createPrimaryAndFundingImportedKeyPairs = async (phrase?: string | 
         pathUsed = path;
     }
     const imported = {}
- 
+
     if (n) {
         for (let i = 2; i < n + 2; i++) {
             imported[i+''] = await createKeyPair(phraseResult, `${pathUsed}/0/` + i)

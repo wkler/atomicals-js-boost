@@ -42,7 +42,6 @@ export class MintInteractiveDatCommand implements CommandInterface {
     });
     // Attach any default data
     let filesData = await readFileAsCompleteDataObject(this.filepath, this.givenFileName);
-    console.log('filesData', filesData);
     await atomicalBuilder.setData(filesData);
     // Attach any requested bitwork
     if (this.options.bitworkc) {
