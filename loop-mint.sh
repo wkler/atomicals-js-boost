@@ -1,25 +1,42 @@
 #!/bin/bash
 
+# Initialize loop count and total duration
+loop_count=0
+total_duration=0
+
 # Specify the number of loops
 numberOfLoops=10
 
 # Use a for loop to execute a specified number of times
 for ((i=1; i<=numberOfLoops; i++))
 do
-    echo "This is the ${i}th loop"
+ # Increment loop count
+    ((loop_count++))
+
+    # Record start time
+    start_time=$(date +%s)
 
     # Run yarn command
-    yarn cli mint-dft quark --satsbyte 100
+    yarn cli mint-dft quark --satsbyte 60 
 
-    # Check whether the command was executed successfully
+    # Record end time
+    end_time=$(date +%s)
+
+    # Calculate duration
+    duration=$((end_time - start_time))
+
+    # Update total duration
+    total_duration=$((total_duration + duration))
+
+    # Check if the command was executed successfully
     if [ $? -ne 0 ]; then
-        echo "Command execution failed, try to run again..."
+        echo "Loop ${loop_count}: Command failed, attempting to rerun... Current duration: ${duration} seconds, Total duration: ${total_duration} seconds" | tee -a quark.log
     else
-        echo "The command was executed successfully and is ready for the next cycle..."
+        echo "Loop ${loop_count}: Command executed successfully, rerunning... Current duration: ${duration} seconds, Total duration: ${total_duration} seconds" | tee -a quark.log
     fi
 
     # Wait for some time (optional)
-    sleep 1
+    sleep 6 
 done
 
 echo "loop completed"
