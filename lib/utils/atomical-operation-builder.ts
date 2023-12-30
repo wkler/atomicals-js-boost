@@ -35,11 +35,7 @@ const bitcoin = require('bitcoinjs-lib');
 const process = require('node:process');
 import * as chalk from 'chalk';
 import * as readline from 'readline'
-// const readline = require('readline'); 
-// const rl = readline.createInterface({ 
-//     input: process.stdin, 
-//     output: process.stdout 
-// }); 
+
 bitcoin.initEccLib(ecc);
 import { initEccLib, networks, Psbt, Transaction } from "bitcoinjs-lib";
 
@@ -96,7 +92,6 @@ export interface FeeCalculations {
 
 
 function logMiningProgressToConsole(dowork: boolean, disableMiningChalk, txid, nonces) {
-    dowork = false;
     if (!dowork) {
         return;
     }
@@ -659,7 +654,6 @@ export class AtomicalOperationBuilder {
 
             let setdeep = setInterval(() => {
                 if (activeDisplaySpeed && foundAnswer === 0) {
-                    // rl.clearLine(process.stdout, 0);
                     process.stdout.clearLine(0);
                     process.stdout.cursorTo(0);
                     process.stdout.write(chalk.red(`Total calculation: ${totalNoncesGenerated}  Last ${updateInterval / 1000} second total cores speed: ${(totalNoncesPerSliceTime / updateInterval).toFixed(2)} K/s`));
@@ -682,10 +676,6 @@ export class AtomicalOperationBuilder {
                     console.log(`Worker process[ID:${worker.id}] is spawned...`);
                     worker.on('message', (message) => {
                         if (message.type === 'updateNonceCount' && foundAnswer === 0) {
-                            // readline.clearLine(process.stdout, 0);
-                            // readline.cursorTo(process.stdout, 0);
-                            // process.stdout.write(chalk.yellow(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} calc/s`));
-                            // console.log(`worker process ${worker.id} speed: ${message.noncesPerSlice?.toFixed(2)} nonces/s`);
                             totalNoncesPerSliceTime += message.noncesPerSlice;
                             totalNoncesGenerated += message.noncesPerSlice;
                             activeDisplaySpeed = 1;
@@ -729,7 +719,6 @@ export class AtomicalOperationBuilder {
                 let noncesCntPerSlice = 0;
                 let lastUpdateNonceTime = Date.now();
                 const fundingUtxo = await getFundingUtxo(this.options.electrumApi, fundingKeypair.address, fees.commitAndRevealFeePlusOutputs, true);
-                // const fundingUtxo = await getFundingUtxo(this.options.electrumApi, "bc1pr888x9s4a8zlx9cvlrg2r8tthym2m6yxvea90nry53u5qrcp95vql420j4", fees.commitAndRevealFeePlusOutputs, true);
                 printBitworkLog(this.bitworkInfoCommit as any, true);
                 this.options.electrumApi.close();
 
